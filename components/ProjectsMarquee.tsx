@@ -8,9 +8,48 @@ import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
 import { projects } from "@/data/projects";
 
+// One full pass through the doubled track (xPercent 0 -> -50) is exactly one
+// lap of the original project list, so any two xPercent values that differ
+// by a multiple of 50 render identically. Looping and stepping both lean on
+// that to jump/wrap without a visible seam.
+function playLoop(track: HTMLDivElement, tweenRef: React.RefObject<gsap.core.Tween | null>) {
+  tweenRef.current = gsap.to(track, {
+    xPercent: "-=50",
+    duration: 70,
+    ease: "none",
+    repeat: -1,
+  });
+}
+
+function stepMarquee(
+  track: HTMLDivElement,
+  tweenRef: React.RefObject<gsap.core.Tween | null>,
+  direction: 1 | -1,
+  step: number,
+) {
+  gsap.killTweensOf(track);
+
+  const current = Number(gsap.getProperty(track, "xPercent"));
+  const raw = current - direction * step;
+
+  tweenRef.current = gsap.to(track, {
+    xPercent: raw,
+    duration: 0.6,
+    ease: "power2.out",
+    onComplete: () => {
+      let normalized = raw;
+      while (normalized <= -50) normalized += 50;
+      while (normalized > 0) normalized -= 50;
+      if (normalized !== raw) gsap.set(track, { xPercent: normalized });
+      playLoop(track, tweenRef);
+    },
+  });
+}
+
 export default function ProjectsMarquee() {
   const trackRef = useRef<HTMLDivElement>(null);
   const tweenRef = useRef<gsap.core.Tween | null>(null);
+  const step = 50 / projects.length;
 
   useGSAP(
     () => {
@@ -29,10 +68,56 @@ export default function ProjectsMarquee() {
 
   return (
     <div
-      className="overflow-hidden py-10 sm:py-24"
+      className="relative overflow-hidden py-10 sm:py-24"
       onMouseEnter={() => tweenRef.current?.pause()}
       onMouseLeave={() => tweenRef.current?.play()}
     >
+      <button
+        type="button"
+        aria-label="Previous project"
+        onClick={() => {
+          if (trackRef.current) stepMarquee(trackRef.current, tweenRef, -1, step);
+        }}
+        className="absolute top-1/2 left-2 z-40 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/80 backdrop-blur transition-colors hover:bg-foreground hover:text-background sm:left-6 sm:h-11 sm:w-11"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="h-4 w-4 sm:h-5 sm:w-5"
+        >
+          <path
+            d="M15 6l-6 6 6 6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      <button
+        type="button"
+        aria-label="Next project"
+        onClick={() => {
+          if (trackRef.current) stepMarquee(trackRef.current, tweenRef, 1, step);
+        }}
+        className="absolute top-1/2 right-2 z-40 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-background/80 backdrop-blur transition-colors hover:bg-foreground hover:text-background sm:right-6 sm:h-11 sm:w-11"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="h-4 w-4 sm:h-5 sm:w-5"
+        >
+          <path
+            d="M9 6l6 6-6 6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
       <div ref={trackRef} className="flex w-max items-center gap-4">
         {items.map((project, i) => {
           const card = (
